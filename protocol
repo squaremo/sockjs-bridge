@@ -1,0 +1,83 @@
+0. Scenario
+
+Proxy <-1--*-> Router
+
+The proxy just handles connections from clients. A router connects to
+the bridge to adapt it to some application, e.g., a pubsub
+application. Many routers can connect to the proxy; connections
+incoming to the proxy will be shared among the connected routers.
+
+We use one TCP connection per router and framing to give us a message
+stream. For this purpose, either 0MQ or TCP+length-prefixed frames
+would do. The protocol uses multipart messages to encode its various
+performatives.
+
+In the grammars below, a dot '.' indicates a part boundary.
+
+1. Attach router
+
+Hello := "HELLO"
+
+The router connects to the proxy and sends "HELLO" to indicate that it
+is ready to accept connections.
+
+2. Detach router
+
+Bye := "BYE"
+
+This indicates that the router will not accept more connections. The
+proxy should not forward new connections to a router after it has
+recieved BYE from it, and may retry any connections that have not yet
+been accepted by that router with another router if one is available.
+
+A router may send "HELLO" after "BYE" if it is again prepared to
+accept connections.
+
+3. Forward connection
+
+Open := "OPEN" . ConnectionName . ConnectionDetail
+ConnectionName := <<octets>>
+ConnectionDetail := <<json>>
+
+The proxy sends this once a client connects to it; it assigns a name
+to the connection, so that the router can refer to that
+connection. The connection detail is a JSON-encoded value containing
+at least the HTTP headers, path, and remote address and port of the
+client. It may also contain SSL metadata.
+
+4. Accept or reject connection
+
+Accept := "ACCEPT" . ConnectionName
+Reject := "REJECT" . ConnectionName . Reason
+Reason := <<octets>>
+
+The proxy waits for the router to indicate whether to accept the
+connection or not. The proxy must send either ACCEPT or REJECT for
+every OPEN. A router must send REJECT if it has most recently sent BYE
+(rather than HELLO).
+
+5. Data from client
+
+RECV := "RECV" . ConnectionName . Data
+Data := <<octets>>
+
+6. Data for client
+
+Send := "SEND" . Data . ConnectionName (. ConnectionName) *
+Cont := "CONT" . ConnectionName (. ConnectionName ) *
+
+To send to one or more clients, the router sends "SEND", the data,
+then the desired recipients. It may continue the recipient list for
+the most recent SEND by using CONT. (NB limiting the recipient list
+length allows the proxy to fair queue SENDs).
+
+7. Flow control of sends
+
+Flow := FLOW . ConnectionName . LWM . Space
+LWM := <<32-bit serial number>>
+Space := <<32-bit int>>
+
+The proxy may allocate a send buffer per client; to prevent
+overflowing, it must indicate available buffer space to the client
+using a sliding window. (NB Space must be less than 2 ^ 31 - 1 to
+avoid wrapping ?)

@@ -1,0 +1,17 @@
+{
+  "author": "Michael Bridgen <mikeb@squaremobius.net>",
+  "name": "sockjs-bridge",
+  "description": "Bridge from SockJS to ?",
+  "version": "0.0.0",
+  "main": "server",
+  "dependencies": {
+    "sockjs": "~0.3",
+    "zmq": "*"
+  },
+  "devDependencies": {
+  },
+  "optionalDependencies": {},
+  "engines": {
+    "node": "*"
+  }
+}
