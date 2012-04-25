@@ -3,27 +3,31 @@
 This is a server that proxies SockJS connections. Why bother? Well,
 not everyone can have a SockJS server in their chosen language,
 whereas TCP/ZeroMQ bindings are far more common. Also, you may wish to
-deploy the bridge independently of your application.
+deploy the bridge independently of your application, because of
+Reasons.
 
 ## Debugging
 
-    $ node server.js
+    $ npm install && node server.js
+
+or
+
+    $ npm start
 
 starts a server that listens for SockJS connections on port 8000 and
 for applications on port 5000.
 
-To simulate an application using the bridge, open a ZeroMQ dealer
-socket to port 5000. For example, in Node.JS:
+The Node.JS module `client` has a simple client that speaks the proxy
+to app protocol. To simulate an application using the bridge, connect
+a client to `localhost:5000`:
 
-    $ var zmq = require('zmq');
-    $ var bridge = zmq.socket('dealer');
-    $ bridge.connect('tcp://localhost:5000');
-    $ bridge.on('message', function(reply) { console.log(reply); });
-    $ bridge.send("HELLO");
+    $ var client = require('./client').connect('tcp://localhost:5000');
+    $ client.on('open', function(id) { client.accept(id); });
+    $ client.on('recv', function(id, data) {console.log(data.toString());});
 
-(Note that you won't hear anything over the socket until someone opens
-a SockJS connection, but you should get some debug output to the
-console from the server).
+To send data to one or more connections, use
+
+   $ client.send(data, connectionId ...);
 
 The `index.html` in the top directory simply includes the appropriate
 script tag so you can open a connection. Try serving it through your
@@ -36,3 +40,4 @@ in the browser, and open a connection (as suggested on the page
 itself):
 
     > var sock = new SockJS('http://localhost:8000/socks');
+    > sock.onmesssage = function(msg) { console.log(msg); };
