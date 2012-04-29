@@ -44,6 +44,17 @@ service.on('message', function(id) {
   }
 });
 
+// takeover handling
+process.on('SIGUSR1', function() {
+  console.log("Received SIGUSR1, freeing registration port");
+  // free the port
+  service.close();
+});
+process.on('SIGUSR2', function() {
+  console.log("Received SIGUSR2, freeing HTTP port");
+  app.close();
+});
+
 routers = [];
 function addRouter(id) {
   routers.push(id);
@@ -122,6 +133,8 @@ service.bind('tcp://*:5000', function() {
   console.log("Service bound to *:5000");
   app.listen(8000);
 });
+
+console.log("Running as pid " + process.pid);
 
 // ============= gubbins ==============
 
