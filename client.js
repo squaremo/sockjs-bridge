@@ -16,6 +16,10 @@ function Client(serviceAddr, bindAddr, connectAddr) {
     case "HUP":
       console.warn("Received HUP from bridge, re-registering with " +
                    that._serviceAddr);
+      service.close();
+      service = zmq.socket('dealer');
+      service.connect(that._serviceAddr);
+      that._service = service;
       that.hello(); // and ...
       break;
     case "OPEN":
@@ -60,10 +64,12 @@ Client.prototype.hello = function() {
     });
   }
 }
+
 Client.prototype.bye = function() {
   // TODO send to all known bridge IDs (collate from connections?)
   this._channel.send("BYE");
 }
+
 Client.prototype.accept = function(id) {
   var connection = this._connections[id];
   if (connection) {
@@ -73,6 +79,7 @@ Client.prototype.accept = function(id) {
     console.warn("Accept unknown connection " + id);
   }
 }
+
 Client.prototype.reject = function(id, reason) {
   reason = reason || "";
   var connection = this._connections[id];
@@ -83,6 +90,18 @@ Client.prototype.reject = function(id, reason) {
     console.warn("Reject unknown connection " + id);
   }
 }
+
+Client.prototype.close = function(id, reason) {
+  reason = reason || "";
+  var connection = this._connections[id];
+  if (connection) {
+    this._channel.send([connection.bridge, "CLOSE", id, reason]);
+  }
+  else {
+    console.warn("Close unknown connection " + id);
+  }
+}
+
 Client.prototype.send = function(data /*, connection ids */) {
   // oh piss.
   var bridges = {};

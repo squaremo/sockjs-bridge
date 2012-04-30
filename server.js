@@ -38,6 +38,12 @@ function wireChannel(id, channel) {
       console.log({reject: args[0]});
       rejectConnection(args[0]);
       break;
+    case "CLOSE":
+      var connId = args[0];
+      var reason = args[1];
+      console.log({close: connId});
+      closeConnection(connId, reason);
+      break;
     case "SEND":
       var data = args[0];
       console.log({send: data});
@@ -46,7 +52,7 @@ function wireChannel(id, channel) {
       }
       break;
     case "CONT":
-      // TODO
+      // TODO -- continue a send
       break;
     default:
       console.warn({unknown: command, args: args});
@@ -104,6 +110,9 @@ function acceptConnection(id) {
   if (conn) {
     open[id] = conn;
     delete pending[id];
+    conn.connection.on('close', function() {
+      conn.router.socket.send(["CLOSE", id]);
+    });
   }
   else {
     console.warn("Accept unknown connection: " + id);
@@ -117,6 +126,17 @@ function rejectConnection(id, connection) {
   }
   else {
     console.warn("Reject unknown connection: " + id);
+  }
+}
+
+function closeConnection(id, reason) {
+  var conn = open[id];
+  if (conn) {
+    conn.connection.close(500, reason);
+    delete open[id];
+  }
+  else {
+    console.warn("Close unknown (or unaccepted) connection: " + id);
   }
 }
 
