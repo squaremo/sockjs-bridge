@@ -146,8 +146,16 @@ socks.on('connection', function(conn) {
   }
 });
 
+var oldPid = false;
+if (process.argv.length > 2) {
+  oldPid = parseInt(process.argv[2]);
+  process.kill(oldPid, 'SIGUSR1');
+}
 service.bind('tcp://*:5000', function() {
   console.log("Service bound to *:5000");
+  if (oldPid) {
+    process.kill(oldPid, 'SIGUSR2');
+  }
   app.listen(8000);
 });
 
