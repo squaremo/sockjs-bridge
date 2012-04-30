@@ -72,7 +72,7 @@ process.on('SIGUSR2', function() {
 
 routers = [];
 function addRouter(addr) {
-  var channel = zmq.socket('pair');
+  var channel = zmq.socket('dealer');
   wireChannel(addr, channel);
   channel.connect(addr);
   routers.push({id: addr, socket: channel});
@@ -142,7 +142,7 @@ socks.on('connection', function(conn) {
   else {
     // TODO Something more constructive
     console.warn("No router to send to! Closing connection");
-    conn.connection.close(500, "No service"); // TODO proper error code.
+    conn.close(500, "No service"); // TODO proper error code.
   }
 });
 

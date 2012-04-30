@@ -4,13 +4,14 @@ function Client(serviceAddr, bindAddr, connectAddr) {
   this._serviceAddr = serviceAddr; // where to register
   this._bindAddr = bindAddr; // where to wait for opens
   this._connectAddr = connectAddr; // where to tell the bridge to send opens
+  var connections = this._connections = {};
 
-  var channel = this._channel = zmq.socket('pair');
+  var channel = this._channel = zmq.socket('router');
   var service = this._service = zmq.socket('dealer');
 
   var that = this;
-  channel.on('message', function(/* parts */) {
-    var command = arguments[0].toString();
+  channel.on('message', function(id /*, parts */) {
+    var command = arguments[1].toString();
     switch (command) {
     case "HUP":
       console.warn("Received HUP from bridge, re-registering with " +
@@ -18,24 +19,30 @@ function Client(serviceAddr, bindAddr, connectAddr) {
       that.hello(); // and ...
       break;
     case "OPEN":
-      var id = arguments[1].toString();
-      var detail = JSON.parse(arguments[2]);
-      that.emit('open', id, detail);
+      var connId = arguments[2].toString();
+      var detail = JSON.parse(arguments[3]);
+      connections[connId] = {bridge: id, detail: detail};
+      that.emit('open', connId, detail);
+      break;
+    case "CLOSE":
+      var connId = arguments[2].toString();
+      that.emit('close', connId);
+      delete connections[connId]; // TODO check if we know about it ..?
       break;
     case "RECV":
-      var id = arguments[1].toString();
-      that.emit('recv', id, arguments[2]);
+      var connId = arguments[2].toString();
+      that.emit('recv', connId, arguments[2]);
       break;
     case "FLOW":
-      var lwm = arguments[2].readUInt32BE();
-      var size = arguments[3].readUInt32BE();
-      that.emit('flow', lwm, size);
+      var connId = arguments[2].toString();
+      var lwm = arguments[3].readUInt32BE();
+      var size = arguments[4].readUInt32BE();
+      that.emit('flow', connId, lwm, size);
       break;
     default:
       console.warn({unknown: command});
     }
   });
-
 }
 Client.prototype = new (require('events').EventEmitter)();
 
@@ -54,20 +61,53 @@ Client.prototype.hello = function() {
   }
 }
 Client.prototype.bye = function() {
+  // TODO send to all known bridge IDs (collate from connections?)
   this._channel.send("BYE");
 }
 Client.prototype.accept = function(id) {
-  this._channel.send(["ACCEPT", id]);
+  var connection = this._connections[id];
+  if (connection) {
+    this._channel.send([connection.bridge, "ACCEPT", id]);
+  }
+  else {
+    console.warn("Accept unknown connection " + id);
+  }
 }
 Client.prototype.reject = function(id, reason) {
   reason = reason || "";
-  this._channel.send(["REJECT", id, reason]);
+  var connection = this._connections[id];
+  if (connection) {
+    this._channel.send([connection.bridge, "REJECT", id, reason]);
+  }
+  else {
+    console.warn("Reject unknown connection " + id);
+  }
 }
 Client.prototype.send = function(data /*, connection ids */) {
-  var parts = Array.prototype.slice.call(arguments);
-  parts.unshift("SEND");
-  this._channel.send(parts);
-}
+  // oh piss.
+  var bridges = {};
+  for (var i = 1, len = arguments.length; i < len; i++) {
+    var connId = arguments[i];
+    var conn = this._connections[connId];
+    if (conn) {
+      if (bridges[conn.bridge]) {
+        bridges[conn.bridge].push(connId);
+      }
+      else {
+        bridges[conn.bridge] = [conn.bridge, "SEND", data, connId];
+      }
+    }
+    else {
+      console.warn("Send to unknown connection " + connId);
+    }
+  }
+  for (k in bridges) {
+    if (bridges.hasOwnProperty(k)) {
+      var parts = bridges[k];
+      this._channel.send(parts);
+    }
+  }
+};
 
 // === and finally
 
